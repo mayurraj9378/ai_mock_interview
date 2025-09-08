@@ -1,12 +1,14 @@
 "use client";
-
 import React from "react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { createUserWithEmailAndPassword , signInWithEmailAndPassword } from "firebase/auth";
 import { Button } from "@/components/ui/button";
+import { auth } from "@/firebase/client";
+import{signIn , signUp} from "@/lib/actions/auth.action";
 import {
   Form,
   FormControl,
@@ -20,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { toast } from "sonner";
 import FormField from "./FormField";
+
 
 
 // 1. Define your schema
@@ -48,13 +51,33 @@ const AuthForm = ({type}: {type:FormType}) => {
   });
 
   // 3. Handle form submission
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       if(type === "sign-up"){
+        const {name, email, password} = values;
+        const userCredentials = await createUserWithEmailAndPassword(auth, email, password);
+        const result = await signUp({
+          uid: userCredentials.user.uid,
+          name: name!,
+          email,
+          password
+        });
+        if (!result || !result.success) {
+          toast.error(result?.message || "An unknown error occurred.");
+          return;
+        }
         console.log("Sign Up", values);
         toast.success("Account created successfully! Please sign in.");
         router.push("/sign-in");
       }else{
+        const {email, password} = values;
+        const userCredentials = await signInWithEmailAndPassword(auth, email, password);
+        const idToken = await userCredentials.user.getIdToken();
+        if(!idToken){
+          toast.error('sign in failed.')
+          return;
+        }
+        await signIn({email, idToken});
         console.log("Sign In", values);
         toast.success("Signed in successfully! Welcome back.");
         router.push("/");
